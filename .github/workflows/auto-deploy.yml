@@ -1,0 +1,89 @@
+name: Script To Auto Deploy Scraped Data From Google Maps To Supabase
+
+on:
+  push:
+    branches: [production, dummy] # rename to just master to generate reviews for every push to github
+    workflow_dispatch:
+  schedule:
+    - cron: 30 1 * * 1,6 # on 07:00am IST = 01:30 UTC TIME every day of the week from Sun to Sat
+
+jobs:
+  setup-python:
+    runs-on: ubuntu-latest
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      # This uses an existing github action to setup a 64bit version of Python 3.9 and makes it default
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.9' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
+
+      # This program is working great fine till the last cat data/new...
+      - name: Run multi line script that generates a csv file with all the reviews
+        env: # Or as an environment variable
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          pip install -r requirements.txt
+          python scraper.py --N 200 --i urls2.txt
+          python backup-to-supabase.py
+          # python --version
+          # Scrape the most recent 200 reviews from urls2.txt and output a
+          # tree
+          # echo "Printing CSV FILE"
+          # cat ./data/newest_gm_reviews.csv
+          # echo "Printing CSV FILE"
+          # echo ""
+          # echo ""
+          # echo "Printing JSON FILE" 
+          # cat ./data/newest_gm_reviews.json
+          # echo "Printing JSON FILE"
+          # comment out lines like this
+          # tree
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: reviews
+          path: ./data/
+
+      - name: Send Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          # Required mail server address:
+          server_address: smtp.gmail.com
+          # Required mail server port:
+          server_port: 465
+          # Optional (recommended): mail server username:
+          username: ${{secrets.MAIL_USERNAME}}
+          # Optional (recommended) mail server password:
+          password: ${{secrets.MAIL_PASSWORD}}
+          # Required mail subject:
+          subject: Backup of Google Maps Reviews
+          # Required recipients' addresses:
+          to: ${{secrets.MAIL_TO_ADDRESS}}
+          # Required sender full name (address can be skipped):
+          from: Tax Matterz Automations # <user@example.com>
+          # Optional whether this connection use TLS (default is true if server_port is 465)
+          secure: true
+          # Optional plain body:
+          body:
+          # Optional HTML body read from file:
+          html_body:
+          # Optional carbon copy recipients:
+          cc: ${{secrets.MAIL_USERNAME}}
+          # Optional blind carbon copy recipients:
+          bcc:
+          # Optional recipient of the email response:
+          reply_to:
+          # Optional Message ID this message is replying to:
+          in_reply_to:
+          # Optional unsigned/invalid certificates allowance:
+          ignore_cert: true
+          # Optional converting Markdown to HTML (set content_type to text/html too):
+          convert_markdown:
+          # Optional attachments:
+          attachments: ./data/newest_gm_reviews.csv, ./data/newest_gm_reviews.json
+          # Optional priority: 'high', 'normal' (default) or 'low'
+          priority: high
